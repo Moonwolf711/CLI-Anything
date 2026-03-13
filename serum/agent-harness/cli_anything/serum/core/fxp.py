@@ -22,7 +22,8 @@ Blob layout (5176 floats = 20704 bytes):
   [680 - 3351]   More curve data, wavetable metadata, padding
   [3352 - 3563]  SYNTH PARAMETERS (~212 controllable values)
   [3564 - 3573]  FX enable flags (binary) + additional FX params (continuous)
-  [3574+]        Voicing, routing, additional data
+  [3574 - 3579]  Voicing params (poly count, pitch bend, glide rate)
+  [3580+]        Routing, additional data, wavetable secondary region
 
 This module exposes a virtual parameter index (0-based sequential) that
 maps to actual blob offsets via PARAM_TO_BLOB.  The public API operates
@@ -327,7 +328,7 @@ PARAM_MAP: dict[int, tuple[str, str, float, float, float]] = {
     166: ("fx_dist_drive",        "Distortion drive",                 0.0, 1.0, 0.50),
     167: ("fx_dist_mix",          "Distortion dry/wet mix",           0.0, 1.0, 0.50),
     168: ("fx_dist_type",         "Distortion type (norm)",           0.0, 1.0, 0.50),
-    169: ("fx_dist_post_filter",  "Distortion post-filter [virtual-only]", 0.0, 1.0, 0.75),
+    169: ("fx_dist_post_filter",  "Distortion post-filter",           0.0, 1.0, 0.0),
 
     # =======================================================================
     # FX: Flanger  (virtual 170-174, blob 3488-3492)
@@ -368,7 +369,7 @@ PARAM_MAP: dict[int, tuple[str, str, float, float, float]] = {
     # =======================================================================
     # FX: Compressor  (virtual 190-194, blob 3504-3508)
     # =======================================================================
-    190: ("fx_comp_enable",       "Compressor on/off [virtual-only]", 0.0, 1.0, 0.0),
+    190: ("fx_comp_enable",       "Compressor on/off",                0.0, 1.0, 1.0),
     191: ("fx_comp_threshold",    "Compressor threshold",             0.0, 1.0, 0.50),
     192: ("fx_comp_ratio",        "Compressor ratio (norm)",          0.0, 1.0, 0.0),
     193: ("fx_comp_attack",       "Compressor attack time",           0.0, 1.0, 0.0),
@@ -435,14 +436,14 @@ PARAM_MAP: dict[int, tuple[str, str, float, float, float]] = {
     # =======================================================================
     # Voicing  (virtual 229-236)
     # =======================================================================
-    229: ("voice_poly_count",     "Polyphony voices [virtual-only]",  0.0, 1.0, 0.50),
+    229: ("voice_poly_count",     "Polyphony voices",                 0.0, 1.0, 0.50),
     230: ("voice_stack_mode",     "Voice stacking [virtual-only]",    0.0, 1.0, 0.0),
     231: ("voice_stack_detune",   "Voice stack detune [virtual-only]", 0.0, 1.0, 0.0),
     232: ("voice_stack_voices",   "Voice stack count [virtual-only]", 0.0, 1.0, 0.0),
-    233: ("voice_bend_range_up",  "Pitch bend up [virtual-only]",     0.0, 1.0, 0.50),
-    234: ("voice_bend_range_dn",  "Pitch bend down [virtual-only]",   0.0, 1.0, 0.50),
+    233: ("voice_bend_range_up",  "Pitch bend up range",              0.0, 1.0, 0.50),
+    234: ("voice_bend_range_dn",  "Pitch bend down range",            0.0, 1.0, 0.0),
     235: ("voice_glide_mode",     "Glide mode [virtual-only]",        0.0, 1.0, 0.0),
-    236: ("voice_glide_rate",     "Glide rate [virtual-only]",        0.0, 1.0, 0.0),
+    236: ("voice_glide_rate",     "Glide rate",                       0.0, 1.0, 0.0),
 
     # =======================================================================
     # Modulation Matrix (virtual 237-268, 16 slots x 2: amount + destination)
@@ -672,7 +673,7 @@ PARAM_TO_BLOB: dict[int, int] = {
     166: 3485,   # fx_dist_drive
     167: 3486,   # fx_dist_mix
     168: 3487,   # fx_dist_type
-    # 169 = virtual-only (post_filter)
+    169: 3569,   # fx_dist_post_filter  (post-mod-matrix continuous region)
 
     # -- FX: Flanger  (blob 3488-3491, enable at 3566) --
     170: 3566,   # fx_flanger_enable  (post-mod-matrix enable flag region)
@@ -702,8 +703,8 @@ PARAM_TO_BLOB: dict[int, int] = {
     188: 3502,   # fx_delay_mix
     189: 3503,   # fx_delay_ping_pong
 
-    # -- FX: Compressor  (blob 3504-3506, attack at 3570) --
-    # 190 = virtual-only (comp enable — not in the 3565-3568 flag region)
+    # -- FX: Compressor  (blob 3504-3506, enable at 3564, attack at 3570) --
+    190: 3564,   # fx_comp_enable  (post-mod-matrix enable flag, before dist/flanger/chorus/delay)
     191: 3504,   # fx_comp_threshold
     192: 3505,   # fx_comp_ratio
     193: 3570,   # fx_comp_attack  (post-mod-matrix continuous region)
@@ -753,8 +754,15 @@ PARAM_TO_BLOB: dict[int, int] = {
     227: 3530,   # macro_3
     228: 3531,   # macro_4
 
-    # -- Voicing  (all virtual-only, overlap mod matrix) --
-    # No entries for 229-236.
+    # -- Voicing  (blob 3574-3579, post-FX-enable region) --
+    229: 3579,   # voice_poly_count
+    # 230 = virtual-only (stack_mode)
+    # 231 = virtual-only (stack_detune)
+    # 232 = virtual-only (stack_voices)
+    233: 3574,   # voice_bend_range_up
+    234: 3576,   # voice_bend_range_dn
+    # 235 = virtual-only (glide_mode)
+    236: 3575,   # voice_glide_rate
 
     # -- Modulation Matrix routing  (blob 3532-3563, pairs) --
     237: 3532,   # mod_1_amount
