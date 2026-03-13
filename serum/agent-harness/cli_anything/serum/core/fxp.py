@@ -21,7 +21,8 @@ Blob layout (5176 floats = 20704 bytes):
   [160 - 679]    LFO/envelope curve point data (260 pairs)
   [680 - 3351]   More curve data, wavetable metadata, padding
   [3352 - 3563]  SYNTH PARAMETERS (~212 controllable values)
-  [3564+]        Routing, macro assignments, additional data
+  [3564 - 3573]  FX enable flags (binary) + additional FX params (continuous)
+  [3574+]        Voicing, routing, additional data
 
 This module exposes a virtual parameter index (0-based sequential) that
 maps to actual blob offsets via PARAM_TO_BLOB.  The public API operates
@@ -322,7 +323,7 @@ PARAM_MAP: dict[int, tuple[str, str, float, float, float]] = {
     # =======================================================================
     # FX: Distortion  (virtual 165-169, blob 3485-3489)
     # =======================================================================
-    165: ("fx_dist_enable",       "Distortion on/off [virtual-only]", 0.0, 1.0, 0.0),
+    165: ("fx_dist_enable",       "Distortion on/off",                0.0, 1.0, 0.0),
     166: ("fx_dist_drive",        "Distortion drive",                 0.0, 1.0, 0.50),
     167: ("fx_dist_mix",          "Distortion dry/wet mix",           0.0, 1.0, 0.50),
     168: ("fx_dist_type",         "Distortion type (norm)",           0.0, 1.0, 0.50),
@@ -331,7 +332,7 @@ PARAM_MAP: dict[int, tuple[str, str, float, float, float]] = {
     # =======================================================================
     # FX: Flanger  (virtual 170-174, blob 3488-3492)
     # =======================================================================
-    170: ("fx_flanger_enable",    "Flanger on/off [virtual-only]",    0.0, 1.0, 0.0),
+    170: ("fx_flanger_enable",    "Flanger on/off",                   0.0, 1.0, 0.0),
     171: ("fx_flanger_rate",      "Flanger rate",                     0.0, 1.0, 0.75),
     172: ("fx_flanger_depth",     "Flanger depth",                    0.0, 1.0, 0.30),
     173: ("fx_flanger_feedback",  "Flanger feedback",                 0.0, 1.0, 0.30),
@@ -349,16 +350,16 @@ PARAM_MAP: dict[int, tuple[str, str, float, float, float]] = {
     # =======================================================================
     # FX: Chorus  (virtual 180-184, blob 3497-3501)
     # =======================================================================
-    180: ("fx_chorus_enable",     "Chorus on/off [virtual-only]",     0.0, 1.0, 0.0),
+    180: ("fx_chorus_enable",     "Chorus on/off",                    0.0, 1.0, 1.0),
     181: ("fx_chorus_rate",       "Chorus rate",                      0.0, 1.0, 0.0),
     182: ("fx_chorus_depth",      "Chorus depth",                     0.0, 1.0, 0.0),
     183: ("fx_chorus_feedback",   "Chorus feedback",                  0.0, 1.0, 0.50),
-    184: ("fx_chorus_mix",        "Chorus dry/wet [virtual-only]",    0.0, 1.0, 0.50),
+    184: ("fx_chorus_mix",        "Chorus dry/wet mix",               0.0, 1.0, 0.0),
 
     # =======================================================================
     # FX: Delay  (virtual 185-189, blob 3500-3504)
     # =======================================================================
-    185: ("fx_delay_enable",      "Delay on/off [virtual-only]",      0.0, 1.0, 0.0),
+    185: ("fx_delay_enable",      "Delay on/off",                     0.0, 1.0, 0.0),
     186: ("fx_delay_time",        "Delay time",                       0.0, 1.0, 0.40),
     187: ("fx_delay_feedback",    "Delay feedback",                   0.0, 1.0, 0.25),
     188: ("fx_delay_mix",         "Delay dry/wet mix",                0.0, 1.0, 0.571),
@@ -370,7 +371,7 @@ PARAM_MAP: dict[int, tuple[str, str, float, float, float]] = {
     190: ("fx_comp_enable",       "Compressor on/off [virtual-only]", 0.0, 1.0, 0.0),
     191: ("fx_comp_threshold",    "Compressor threshold",             0.0, 1.0, 0.50),
     192: ("fx_comp_ratio",        "Compressor ratio (norm)",          0.0, 1.0, 0.0),
-    193: ("fx_comp_attack",       "Compressor attack [virtual-only]", 0.0, 1.0, 0.50),
+    193: ("fx_comp_attack",       "Compressor attack time",           0.0, 1.0, 0.0),
     194: ("fx_comp_mix",          "Compressor mix / on flag",         0.0, 1.0, 1.0),
 
     # =======================================================================
@@ -395,8 +396,8 @@ PARAM_MAP: dict[int, tuple[str, str, float, float, float]] = {
     # FX: Reverb  (virtual 205-209, blob 3510-3514)
     # =======================================================================
     205: ("fx_reverb_enable",     "Reverb on/off",                    0.0, 1.0, 0.0),
-    206: ("fx_reverb_size",       "Reverb room size [virtual-only]",  0.0, 1.0, 0.50),
-    207: ("fx_reverb_decay",      "Reverb decay [virtual-only]",      0.0, 1.0, 0.50),
+    206: ("fx_reverb_size",       "Reverb room size",                 0.0, 1.0, 0.0),
+    207: ("fx_reverb_decay",      "Reverb decay time",                0.0, 1.0, 0.0),
     208: ("fx_reverb_mix",        "Reverb dry/wet mix",               0.0, 1.0, 0.0),
     209: ("fx_reverb_damping",    "Reverb damping / HF cut",          0.0, 1.0, 0.0),
 
@@ -666,15 +667,15 @@ PARAM_TO_BLOB: dict[int, int] = {
     163: 3483,   # fx_hyper_detune
     164: 3484,   # fx_hyper_mix
 
-    # -- FX: Distortion  (blob 3485-3487) --
-    # 165 = virtual-only (enable)
+    # -- FX: Distortion  (blob 3485-3487, enable at 3565) --
+    165: 3565,   # fx_dist_enable  (post-mod-matrix enable flag region)
     166: 3485,   # fx_dist_drive
     167: 3486,   # fx_dist_mix
     168: 3487,   # fx_dist_type
-    # 169 = virtual-only (post_filter overlaps flanger)
+    # 169 = virtual-only (post_filter)
 
-    # -- FX: Flanger  (blob 3488-3491) --
-    # 170 = virtual-only (enable)
+    # -- FX: Flanger  (blob 3488-3491, enable at 3566) --
+    170: 3566,   # fx_flanger_enable  (post-mod-matrix enable flag region)
     171: 3488,   # fx_flanger_rate
     172: 3489,   # fx_flanger_depth
     173: 3490,   # fx_flanger_feedback
@@ -687,25 +688,25 @@ PARAM_TO_BLOB: dict[int, int] = {
     178: 3496,   # fx_phaser_feedback
     179: 3493,   # fx_phaser_mix
 
-    # -- FX: Chorus  (blob 3497-3499) --
-    # 180 = virtual-only (enable)
+    # -- FX: Chorus  (blob 3497-3499, enable at 3567, mix at 3573) --
+    180: 3567,   # fx_chorus_enable  (post-mod-matrix enable flag region)
     181: 3497,   # fx_chorus_rate
     182: 3498,   # fx_chorus_depth
     183: 3499,   # fx_chorus_feedback
-    # 184 = virtual-only (mix overlaps delay)
+    184: 3573,   # fx_chorus_mix  (post-mod-matrix continuous region)
 
-    # -- FX: Delay  (blob 3500-3503) --
-    # 185 = virtual-only (enable)
+    # -- FX: Delay  (blob 3500-3503, enable at 3568) --
+    185: 3568,   # fx_delay_enable  (post-mod-matrix enable flag region)
     186: 3500,   # fx_delay_time
     187: 3501,   # fx_delay_feedback
     188: 3502,   # fx_delay_mix
     189: 3503,   # fx_delay_ping_pong
 
-    # -- FX: Compressor  (blob 3504-3506) --
-    # 190 = virtual-only (enable)
+    # -- FX: Compressor  (blob 3504-3506, attack at 3570) --
+    # 190 = virtual-only (comp enable — not in the 3565-3568 flag region)
     191: 3504,   # fx_comp_threshold
     192: 3505,   # fx_comp_ratio
-    # 193 = virtual-only (attack overlaps mix)
+    193: 3570,   # fx_comp_attack  (post-mod-matrix continuous region)
     194: 3506,   # fx_comp_mix
 
     # -- FX: Multiband Compressor  (blob 3507-3508) --
@@ -721,9 +722,10 @@ PARAM_TO_BLOB: dict[int, int] = {
     203: 3512,   # fx_eq_high_gain
     # 204 = virtual-only (overlap reverb/filter)
 
-    # -- FX: Reverb  (blob 3510, 3513-3514) --
+    # -- FX: Reverb  (blob 3510, 3513-3514, size/decay at 3571-3572) --
     205: 3510,   # fx_reverb_enable
-    # 206, 207 = virtual-only (overlap EQ)
+    206: 3571,   # fx_reverb_size  (post-mod-matrix continuous region)
+    207: 3572,   # fx_reverb_decay  (post-mod-matrix continuous region)
     208: 3513,   # fx_reverb_mix
     209: 3514,   # fx_reverb_damping
 
