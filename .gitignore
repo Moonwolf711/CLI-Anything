@@ -32,6 +32,7 @@
 !/anygen/
 !/zoom/
 !/drawio/
+!/ableton/
 
 # Step 5: Inside each software dir, ignore everything (including dotfiles)
 /gimp/*
@@ -56,6 +57,8 @@
 /zoom/.*
 /drawio/*
 /drawio/.*
+/ableton/*
+/ableton/.*
 
 # Step 6: ...except agent-harness/
 !/gimp/agent-harness/
@@ -69,6 +72,7 @@
 !/anygen/agent-harness/
 !/zoom/agent-harness/
 !/drawio/agent-harness/
+!/ableton/agent-harness/
 
 # Step 7: Ignore build artifacts within allowed dirs
 **/__pycache__/
@@ -84,6 +88,7 @@
 **/*.xcf
 **/*.mlt
 **/*.drawio
+**/*.als
 
 # Step 8: But allow assets images
 !/assets/*.png
